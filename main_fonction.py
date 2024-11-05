@@ -4,6 +4,8 @@ import requests
 import pandas as pd
 import datetime
 import time
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
@@ -12,22 +14,34 @@ load_dotenv(r"D:\Python\Perso\Esport\venv\.env")
 
 api_key = os.environ.get("api_riot_key")
 
+# Setup retry strategy
+retry_strategy = Retry(
+    total=5,
+    backoff_factor=1,
+    status_forcelist=[429, 500, 502, 503, 504],
+    method_whitelist=["HEAD", "GET", "OPTIONS"]
+)
+adapter = HTTPAdapter(max_retries=retry_strategy)
+http = requests.Session()
+http.mount("https://", adapter)
+http.mount("http://", adapter)
+
 # Fonction de base :
 def get_puuid(gameName:str, tagLine:str):
     root = "https://europe.api.riotgames.com/riot/account/v1/accounts/by-riot-id/"
     endpoint = f"{gameName}/{tagLine}"
-    return requests.get(root + endpoint + "?api_key=" + api_key).json()["puuid"]
+    return http.get(root + endpoint + "?api_key=" + api_key).json()["puuid"]
 
 def get_match_history(puuid:str, start: int, type:str):
     root_url = "https://europe.api.riotgames.com"
     endpoint = f"/lol/match/v5/matches/by-puuid/{puuid}/ids"
     query_params = f"?type={type}&?start={start}&count=50"
-    return requests.get(root_url + endpoint + query_params + '&api_key=' + api_key).json()
+    return http.get(root_url + endpoint + query_params + '&api_key=' + api_key).json()
 
 def get_match_data_from_Id(matchId=None):
     root_url = "https://europe.api.riotgames.com"
     endpoint = f"/lol/match/v5/matches/{matchId}"
-    return requests.get(root_url + endpoint + '?api_key=' + api_key).json()
+    return http.get(root_url + endpoint + '?api_key=' + api_key).json()
 
 # Trouver les index des joueurs :
 def find_index_match_player(match,player_puuid_searched:str):
@@ -309,7 +323,7 @@ def info_par_role(gameName:str, tagLine:str, start_game:int, index_role:list[int
 def get_timeline(match_id:str):
     root = "https://europe.api.riotgames.com"
     endpoint = f"/lol/match/v5/matches/{match_id}/timeline"
-    return requests.get(root + endpoint + "?api_key=" + api_key).json()
+    return http.get(root + endpoint + "?api_key=" + api_key).json()
 
 def db_game_data(gameName:str, tagLine:str, champName:str = None, span:int = None ,count:int = None, nb_of_games:int = None):
     """Ca garde en mémoire le nombre de game que tu veux. 
@@ -462,7 +476,7 @@ def get_kp_for_player(game_data, player_index):
 def get_match_participants(match_id):
     # Remplacez cette URL avec l'URL correcte pour obtenir les participants du match
     url = f"{BASE_URL}/lol/match/v5/matches/{match_id}?api_key={api_key}"
-    response = requests.get(url)
+    response = http.get(url)
     data = response.json()
     
     participants = []
@@ -475,12 +489,5 @@ def get_user_info(gameName:str,tagLine:str):
     puuid = get_puuid(gameName=gameName,tagLine=tagLine)
     base_url= "https://europe.api.riotgames.com"
     url = f"{base_url}/riot/account/v1/accounts/by-puuid/{puuid}?api_key={api_key}"
-    response = requests.get(url)
+    response = http.get(url)
     return response.json()["gameName"]
-
-
-
-
-
-
-
